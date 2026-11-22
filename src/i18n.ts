@@ -224,6 +224,7 @@ export const TRANSLATIONS = {
     hqAdminCreatedNotice: '新主账号已创建，可直接使用该用户名与密码登录',
     envPasscodeNotice: '当前主账号密码由环境变量 ADMIN_PASSCODE 托管，如需更改请在系统 Secrets 中修改。',
     passwordUpdated: '密码已更新',
+    invalidCredentialError: '账号或密码错误，或该账号尚未创建。如果是隐藏主账号，请先用 admin 登录后在左侧「新增主账号」中创建。',
     errorGeneric: '操作失败，请检查输入并重试',
   },
   en: {
@@ -407,6 +408,7 @@ export const TRANSLATIONS = {
     hqAdminCreatedNotice: 'Secondary HQ admin created and ready to sign in',
     envPasscodeNotice: 'Main password is managed via ADMIN_PASSCODE environment secret.',
     passwordUpdated: 'Password updated',
+    invalidCredentialError: 'Incorrect username or password, or account not created yet. To add a hidden HQ admin, sign in as admin first and use "Add HQ Admin".',
     errorGeneric: 'Operation failed, please verify inputs and retry',
   },
   vi: {
@@ -590,6 +592,7 @@ export const TRANSLATIONS = {
     hqAdminCreatedNotice: 'Đã tạo tài khoản chính mới, có thể đăng nhập ngay',
     envPasscodeNotice: 'Mật khẩu tài khoản chính đang được quản lý qua biến môi trường ADMIN_PASSCODE.',
     passwordUpdated: 'Đã cập nhật mật khẩu',
+    invalidCredentialError: 'Sai tài khoản/mật khẩu hoặc tài khoản chưa được tạo. Để thêm tài khoản chính ẩn, hãy đăng nhập bằng admin trước rồi chọn "Thêm tài khoản chính".',
     errorGeneric: 'Thao tác thất bại, vui lòng kiểm tra lại',
   },
 } as const;

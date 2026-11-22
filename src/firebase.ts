@@ -1,5 +1,10 @@
 import { deleteApp, initializeApp } from 'firebase/app';
-import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  getAuth,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -88,13 +93,29 @@ export function usernameToHqAuthEmail(username: string): string {
   return `${clean}@${HQ_EMAIL_DOMAIN}`;
 }
 
-async function provisionAuthUserByEmail(email: string, password: string): Promise<string> {
+async function provisionAuthUserByEmail(
+  email: string,
+  password: string,
+  allowExistingSignIn = false
+): Promise<string> {
   const secondaryName = `provisioner_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const secondaryApp = initializeApp(firebaseConfig, secondaryName);
   const secondaryAuth = getAuth(secondaryApp);
   try {
-    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-    const uid = cred.user.uid;
+    let uid = '';
+    try {
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      uid = cred.user.uid;
+    } catch (err) {
+      const code = (err as { code?: string })?.code || '';
+      const msg = err instanceof Error ? err.message : String(err);
+      if (allowExistingSignIn && (code === 'auth/email-already-in-use' || msg.includes('email-already-in-use'))) {
+        const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
+        uid = cred.user.uid;
+      } else {
+        throw err;
+      }
+    }
     await signOut(secondaryAuth);
     return uid;
   } finally {
@@ -103,9 +124,9 @@ async function provisionAuthUserByEmail(email: string, password: string): Promis
 }
 
 export async function provisionFactoryAuthUser(username: string, password: string): Promise<string> {
-  return provisionAuthUserByEmail(usernameToAuthEmail(username), password);
+  return provisionAuthUserByEmail(usernameToAuthEmail(username), password, false);
 }
 
 export async function provisionHqAdminAuthUser(username: string, password: string): Promise<string> {
-  return provisionAuthUserByEmail(usernameToHqAuthEmail(username), password);
+  return provisionAuthUserByEmail(usernameToHqAuthEmail(username), password, true);
 }

@@ -55,9 +55,19 @@ export function LoginView({ lang, onLangChange, externalError }: LoginViewProps)
     try {
       await api.loginWithCredentials(username.trim(), password);
     } catch (err) {
+      const code = (err as { code?: string })?.code || '';
       const msg = err instanceof Error ? err.message : t.errorGeneric;
-      if (msg.includes('operation-not-allowed')) {
+      if (msg.includes('operation-not-allowed') || code === 'auth/operation-not-allowed') {
         setError(t.emailProviderDisabledHint);
+      } else if (
+        code === 'auth/invalid-credential' ||
+        code === 'auth/wrong-password' ||
+        code === 'auth/user-not-found' ||
+        msg.includes('invalid-credential') ||
+        msg.includes('wrong-password') ||
+        msg.includes('user-not-found')
+      ) {
+        setError(t.invalidCredentialError);
       } else {
         setError(msg);
       }
@@ -82,9 +92,17 @@ export function LoginView({ lang, onLangChange, externalError }: LoginViewProps)
     try {
       await api.setupMainAccount(password);
     } catch (err) {
+      const code = (err as { code?: string })?.code || '';
       const msg = err instanceof Error ? err.message : t.errorGeneric;
-      if (msg.includes('operation-not-allowed')) {
+      if (msg.includes('operation-not-allowed') || code === 'auth/operation-not-allowed') {
         setError(t.emailProviderDisabledHint);
+      } else if (
+        code === 'auth/invalid-credential' ||
+        code === 'auth/wrong-password' ||
+        msg.includes('invalid-credential') ||
+        msg.includes('wrong-password')
+      ) {
+        setError(t.invalidCredentialError);
       } else {
         setError(msg);
       }
