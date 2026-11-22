@@ -1,0 +1,8 @@
+{
+  "name": "DurianVault — 冻榴莲肉多工厂库存协同系统",
+  "description": "Multi-factory frozen durian pulp inventory management and valuation console with Chinese, English, and Vietnamese support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

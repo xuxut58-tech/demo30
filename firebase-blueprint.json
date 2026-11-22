@@ -1,0 +1,182 @@
+{
+  "entities": {
+    "SetupMeta": {
+      "title": "SetupMeta",
+      "description": "Immutable first-run initialization lock indicating whether the HQ admin account has been claimed (no PII)",
+      "type": "object",
+      "properties": {
+        "initialized": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["initialized", "createdAt"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized headquarters administrator account",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "GlobalSettings": {
+      "title": "GlobalSettings",
+      "description": "Headquarters currency and valuation settings",
+      "type": "object",
+      "properties": {
+        "currency": { "type": "string", "enum": ["CNY", "USD", "VND"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["currency", "updatedAt"]
+    },
+    "Grade": {
+      "title": "Grade",
+      "description": "Frozen durian pulp grade classification",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "maxLength": 20, "pattern": "^[A-Za-z0-9_-]+$" },
+        "nameZh": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "nameEn": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "nameVi": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "specZh": { "type": "string", "maxLength": 160 },
+        "specEn": { "type": "string", "maxLength": 160 },
+        "specVi": { "type": "string", "maxLength": 160 },
+        "sortOrder": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "nameZh", "nameEn", "nameVi", "specZh", "specEn", "specVi", "sortOrder", "isActive", "updatedAt"]
+    },
+    "Factory": {
+      "title": "Factory",
+      "description": "Frozen durian pulp processing plant and assigned credentials mapping",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "maxLength": 32, "pattern": "^[A-Za-z0-9_-]+$" },
+        "nameZh": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "nameEn": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "nameVi": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "region": { "type": "string", "enum": ["VN", "TH", "MY", "CN", "OTHER"] },
+        "location": { "type": "string", "maxLength": 120 },
+        "username": { "type": "string", "minLength": 3, "maxLength": 64, "pattern": "^[a-z0-9_.-]+$" },
+        "ownerUid": { "type": "string", "maxLength": 128 },
+        "authorizedEmail": { "type": "string", "maxLength": 160 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "nameZh", "nameEn", "nameVi", "region", "location", "username", "ownerUid", "authorizedEmail", "isActive", "createdAt", "updatedAt"]
+    },
+    "InventoryEntry": {
+      "title": "InventoryEntry",
+      "description": "Current frozen durian pulp stock quantity for a factory and grade",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$" },
+        "gradeId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$" },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "factoryAuthorizedEmail": { "type": "string", "maxLength": 160 },
+        "quantityKg": { "type": "number" },
+        "note": { "type": "string", "maxLength": 200 },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string", "minLength": 1, "maxLength": 160 }
+      },
+      "required": ["factoryId", "gradeId", "factoryOwnerUid", "factoryAuthorizedEmail", "quantityKg", "note", "updatedAt", "updatedBy"]
+    },
+    "FactoryPrice": {
+      "title": "FactoryPrice",
+      "description": "HQ-only unit price per kg for a specific factory and pulp grade",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$" },
+        "gradeId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$" },
+        "unitPrice": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "gradeId", "unitPrice", "updatedAt"]
+    },
+    "InventoryLog": {
+      "title": "InventoryLog",
+      "description": "Audit log of factory stock submissions",
+      "type": "object",
+      "properties": {
+        "factoryId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$" },
+        "factoryCode": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "factoryNameZh": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "factoryNameEn": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "factoryNameVi": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "factoryAuthorizedEmail": { "type": "string", "maxLength": 160 },
+        "actorUsername": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "actorRole": { "type": "string", "enum": ["admin", "factory"] },
+        "totalKg": { "type": "number" },
+        "snapshot": { "type": "array" },
+        "note": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["factoryId", "factoryCode", "factoryNameZh", "factoryNameEn", "factoryNameVi", "factoryOwnerUid", "factoryAuthorizedEmail", "actorUsername", "actorRole", "totalKg", "snapshot", "note", "createdAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Admin-visible accountability log tracking factory logins, inventory updates, and unit price changes",
+      "type": "object",
+      "properties": {
+        "eventType": { "type": "string", "enum": ["login", "inventory_update", "price_change"] },
+        "factoryId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$" },
+        "factoryCode": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "factoryNameZh": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "factoryNameEn": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "factoryNameVi": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "factoryOwnerUid": { "type": "string", "maxLength": 128 },
+        "factoryAuthorizedEmail": { "type": "string", "maxLength": 160 },
+        "actorUsername": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "actorRole": { "type": "string", "enum": ["admin", "factory"] },
+        "currency": { "type": "string", "enum": ["CNY", "USD", "VND", ""] },
+        "totalKg": { "type": "number" },
+        "details": { "type": "string", "maxLength": 500 },
+        "note": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["eventType", "factoryId", "factoryCode", "factoryNameZh", "factoryNameEn", "factoryNameVi", "factoryOwnerUid", "factoryAuthorizedEmail", "actorUsername", "actorRole", "currency", "totalKg", "details", "note", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/publicMeta/{setupId}": {
+      "schema": { "$ref": "#/entities/SetupMeta" },
+      "description": "Immutable first-run initialization lock document (setup)"
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Authorized admin accounts"
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/GlobalSettings" },
+      "description": "Global HQ currency setting"
+    },
+    "/grades/{gradeId}": {
+      "schema": { "$ref": "#/entities/Grade" },
+      "description": "Frozen durian pulp grade catalog (without prices)"
+    },
+    "/factories/{factoryId}": {
+      "schema": { "$ref": "#/entities/Factory" },
+      "description": "Processing factories and assigned account bindings"
+    },
+    "/inventory/{inventoryId}": {
+      "schema": { "$ref": "#/entities/InventoryEntry" },
+      "description": "Factory-grade inventory quantities keyed as {factoryId}_{gradeId}"
+    },
+    "/factoryPrices/{priceId}": {
+      "schema": { "$ref": "#/entities/FactoryPrice" },
+      "description": "HQ-private per-factory unit prices keyed as {factoryId}_{gradeId}"
+    },
+    "/inventoryLogs/{logId}": {
+      "schema": { "$ref": "#/entities/InventoryLog" },
+      "description": "Submission history per factory"
+    },
+    "/activityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Admin-only accountability audit log across logins, stock updates, and price changes"
+    }
+  }
+}

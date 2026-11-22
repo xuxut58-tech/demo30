@@ -1,0 +1,352 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isBootstrapAdmin() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'xuxut58@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrapAdmin()
+        || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isFactoryDocOwner(factoryData) {
+      return isSignedIn() && (
+        (factoryData.ownerUid != '' && factoryData.ownerUid == request.auth.uid)
+        || (factoryData.authorizedEmail != ''
+          && request.auth.token.email_verified == true
+          && factoryData.authorizedEmail == request.auth.token.email)
+      );
+    }
+
+    function isValidSetupMeta(data) {
+      return data.keys().hasAll(['initialized', 'createdAt'])
+        && data.keys().hasOnly(['initialized', 'createdAt'])
+        && data.initialized == true
+        && data.createdAt == request.time;
+    }
+
+    function isValidAdminUser(data) {
+      return data.keys().hasAll(['email', 'createdAt'])
+        && data.keys().hasOnly(['email', 'createdAt'])
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['currency', 'updatedAt'])
+        && data.keys().hasOnly(['currency', 'updatedAt'])
+        && data.currency in ['CNY', 'USD', 'VND']
+        && data.updatedAt == request.time;
+    }
+
+    function isValidGrade(data) {
+      return data.keys().hasAll([
+          'code', 'nameZh', 'nameEn', 'nameVi',
+          'specZh', 'specEn', 'specVi',
+          'sortOrder', 'isActive', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'code', 'nameZh', 'nameEn', 'nameVi',
+          'specZh', 'specEn', 'specVi',
+          'sortOrder', 'isActive', 'updatedAt'
+        ])
+        && data.code is string && data.code.size() >= 1 && data.code.size() <= 20 && data.code.matches('^[A-Za-z0-9_\\-]+$')
+        && data.nameZh is string && data.nameZh.size() >= 1 && data.nameZh.size() <= 100
+        && data.nameEn is string && data.nameEn.size() >= 1 && data.nameEn.size() <= 100
+        && data.nameVi is string && data.nameVi.size() >= 1 && data.nameVi.size() <= 100
+        && data.specZh is string && data.specZh.size() <= 160
+        && data.specEn is string && data.specEn.size() <= 160
+        && data.specVi is string && data.specVi.size() <= 160
+        && data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000
+        && data.isActive is bool
+        && data.updatedAt == request.time;
+    }
+
+    function isValidFactory(data) {
+      return data.keys().hasAll([
+          'code', 'nameZh', 'nameEn', 'nameVi',
+          'region', 'location', 'username',
+          'ownerUid', 'authorizedEmail', 'isActive',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'code', 'nameZh', 'nameEn', 'nameVi',
+          'region', 'location', 'username',
+          'ownerUid', 'authorizedEmail', 'isActive',
+          'createdAt', 'updatedAt'
+        ])
+        && data.code is string && data.code.size() >= 1 && data.code.size() <= 32 && data.code.matches('^[A-Za-z0-9_\\-]+$')
+        && data.nameZh is string && data.nameZh.size() >= 1 && data.nameZh.size() <= 100
+        && data.nameEn is string && data.nameEn.size() >= 1 && data.nameEn.size() <= 100
+        && data.nameVi is string && data.nameVi.size() >= 1 && data.nameVi.size() <= 100
+        && data.region in ['VN', 'TH', 'MY', 'CN', 'OTHER']
+        && data.location is string && data.location.size() <= 120
+        && data.username is string && data.username.size() >= 3 && data.username.size() <= 64 && data.username.matches('^[a-z0-9_.-]+$')
+        && data.ownerUid is string && data.ownerUid.size() <= 128
+        && data.authorizedEmail is string && data.authorizedEmail.size() <= 160
+        && data.isActive is bool
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidInventoryEntry(data) {
+      return data.keys().hasAll([
+          'factoryId', 'gradeId',
+          'factoryOwnerUid', 'factoryAuthorizedEmail',
+          'quantityKg', 'note', 'updatedAt', 'updatedBy'
+        ])
+        && data.keys().hasOnly([
+          'factoryId', 'gradeId',
+          'factoryOwnerUid', 'factoryAuthorizedEmail',
+          'quantityKg', 'note', 'updatedAt', 'updatedBy'
+        ])
+        && isValidId(data.factoryId)
+        && isValidId(data.gradeId)
+        && data.factoryOwnerUid is string && data.factoryOwnerUid.size() <= 128
+        && data.factoryAuthorizedEmail is string && data.factoryAuthorizedEmail.size() <= 160
+        && data.quantityKg is number && data.quantityKg >= 0 && data.quantityKg <= 10000000
+        && data.note is string && data.note.size() <= 200
+        && data.updatedAt == request.time
+        && data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 160;
+    }
+
+    function isValidFactoryPrice(data) {
+      return data.keys().hasAll(['factoryId', 'gradeId', 'unitPrice', 'updatedAt'])
+        && data.keys().hasOnly(['factoryId', 'gradeId', 'unitPrice', 'updatedAt'])
+        && isValidId(data.factoryId)
+        && isValidId(data.gradeId)
+        && data.unitPrice is number && data.unitPrice >= 0 && data.unitPrice <= 10000000
+        && data.updatedAt == request.time;
+    }
+
+    function isValidInventoryLog(data) {
+      return data.keys().hasAll([
+          'factoryId', 'factoryCode',
+          'factoryNameZh', 'factoryNameEn', 'factoryNameVi',
+          'factoryOwnerUid', 'factoryAuthorizedEmail',
+          'actorUsername', 'actorRole', 'totalKg',
+          'snapshot', 'note', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'factoryId', 'factoryCode',
+          'factoryNameZh', 'factoryNameEn', 'factoryNameVi',
+          'factoryOwnerUid', 'factoryAuthorizedEmail',
+          'actorUsername', 'actorRole', 'totalKg',
+          'snapshot', 'note', 'createdAt'
+        ])
+        && isValidId(data.factoryId)
+        && data.factoryCode is string && data.factoryCode.size() >= 1 && data.factoryCode.size() <= 32
+        && data.factoryNameZh is string && data.factoryNameZh.size() >= 1 && data.factoryNameZh.size() <= 100
+        && data.factoryNameEn is string && data.factoryNameEn.size() >= 1 && data.factoryNameEn.size() <= 100
+        && data.factoryNameVi is string && data.factoryNameVi.size() >= 1 && data.factoryNameVi.size() <= 100
+        && data.factoryOwnerUid is string && data.factoryOwnerUid.size() <= 128
+        && data.factoryAuthorizedEmail is string && data.factoryAuthorizedEmail.size() <= 160
+        && data.actorUsername is string && data.actorUsername.size() >= 1 && data.actorUsername.size() <= 160
+        && data.actorRole in ['admin', 'factory']
+        && data.totalKg is number && data.totalKg >= 0 && data.totalKg <= 100000000
+        && data.snapshot is list && data.snapshot.size() <= 50
+        && (data.snapshot.size() == 0 || data.snapshot[0] is map)
+        && data.note is string && data.note.size() <= 300
+        && data.createdAt == request.time;
+    }
+
+    function isValidActivityLog(data) {
+      return data.keys().hasAll([
+          'eventType', 'factoryId', 'factoryCode',
+          'factoryNameZh', 'factoryNameEn', 'factoryNameVi',
+          'factoryOwnerUid', 'factoryAuthorizedEmail',
+          'actorUsername', 'actorRole', 'currency',
+          'totalKg', 'details', 'note', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'eventType', 'factoryId', 'factoryCode',
+          'factoryNameZh', 'factoryNameEn', 'factoryNameVi',
+          'factoryOwnerUid', 'factoryAuthorizedEmail',
+          'actorUsername', 'actorRole', 'currency',
+          'totalKg', 'details', 'note', 'createdAt'
+        ])
+        && data.eventType in ['login', 'inventory_update', 'price_change']
+        && isValidId(data.factoryId)
+        && data.factoryCode is string && data.factoryCode.size() >= 1 && data.factoryCode.size() <= 32
+        && data.factoryNameZh is string && data.factoryNameZh.size() >= 1 && data.factoryNameZh.size() <= 100
+        && data.factoryNameEn is string && data.factoryNameEn.size() >= 1 && data.factoryNameEn.size() <= 100
+        && data.factoryNameVi is string && data.factoryNameVi.size() >= 1 && data.factoryNameVi.size() <= 100
+        && data.factoryOwnerUid is string && data.factoryOwnerUid.size() <= 128
+        && data.factoryAuthorizedEmail is string && data.factoryAuthorizedEmail.size() <= 160
+        && data.actorUsername is string && data.actorUsername.size() >= 1 && data.actorUsername.size() <= 160
+        && data.actorRole in ['admin', 'factory']
+        && data.currency in ['CNY', 'USD', 'VND', '']
+        && data.totalKg is number && data.totalKg >= 0 && data.totalKg <= 100000000
+        && data.details is string && data.details.size() <= 500
+        && data.note is string && data.note.size() <= 300
+        && data.createdAt == request.time;
+    }
+
+    function matchesParentFactory(factoryId, ownerUid, authorizedEmail) {
+      let factoryDoc = get(/databases/$(database)/documents/factories/$(factoryId)).data;
+      return factoryDoc.isActive == true
+        && isFactoryDocOwner(factoryDoc)
+        && factoryDoc.ownerUid == ownerUid
+        && factoryDoc.authorizedEmail == authorizedEmail;
+    }
+
+    match /test/connection {
+      allow get: if isSignedIn();
+    }
+
+    match /publicMeta/{setupId} {
+      allow get: if isValidId(setupId) && setupId == 'setup';
+      allow list: if false;
+      allow create: if isValidId(setupId)
+        && setupId == 'setup'
+        && isSignedIn()
+        && !exists(/databases/$(database)/documents/publicMeta/setup)
+        && isValidSetupMeta(incoming())
+        && existsAfter(/databases/$(database)/documents/admins/$(request.auth.uid));
+      allow update, delete: if false;
+    }
+
+    match /admins/{uid} {
+      allow get: if isValidId(uid) && isSignedIn() && (uid == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(uid)
+        && isSignedIn()
+        && isValidAdminUser(incoming())
+        && incoming().createdAt == request.time
+        && (
+          (uid == request.auth.uid
+            && !exists(/databases/$(database)/documents/publicMeta/setup)
+            && existsAfter(/databases/$(database)/documents/publicMeta/setup))
+          || isBootstrapAdmin()
+        );
+      allow update: if isValidId(uid) && isAdmin() && isValidAdminUser(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isValidId(uid) && isBootstrapAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow get: if isValidId(settingId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(settingId) && isAdmin() && isValidSettings(incoming());
+      allow delete: if isValidId(settingId) && isAdmin();
+    }
+
+    match /grades/{gradeId} {
+      allow get: if isValidId(gradeId) && (isAdmin() || (isSignedIn() && existing().isActive == true));
+      allow list: if isAdmin() || (isSignedIn() && resource.data.isActive == true);
+      allow create, update: if isValidId(gradeId) && isAdmin() && isValidGrade(incoming());
+      allow delete: if isValidId(gradeId) && isAdmin();
+    }
+
+    match /factories/{factoryId} {
+      allow get: if isValidId(factoryId) && (isAdmin() || isFactoryDocOwner(existing()));
+      allow list: if isAdmin() || (isSignedIn() && (
+        (resource.data.ownerUid != '' && resource.data.ownerUid == request.auth.uid)
+        || (resource.data.authorizedEmail != '' && request.auth.token.email_verified == true && resource.data.authorizedEmail == request.auth.token.email)
+      ));
+      allow create: if isValidId(factoryId) && isAdmin() && isValidFactory(incoming()) && incoming().createdAt == request.time;
+      allow update: if isValidId(factoryId) && isAdmin() && isValidFactory(incoming()) && incoming().createdAt == existing().createdAt;
+      allow delete: if isValidId(factoryId) && isAdmin();
+    }
+
+    match /inventory/{inventoryId} {
+      allow get: if isValidId(inventoryId) && (
+        isAdmin()
+        || (isSignedIn() && (
+          (existing().factoryOwnerUid != '' && existing().factoryOwnerUid == request.auth.uid)
+          || (existing().factoryAuthorizedEmail != '' && request.auth.token.email_verified == true && existing().factoryAuthorizedEmail == request.auth.token.email)
+        ))
+      );
+      allow list: if isAdmin() || (isSignedIn() && (
+        (resource.data.factoryOwnerUid != '' && resource.data.factoryOwnerUid == request.auth.uid)
+        || (resource.data.factoryAuthorizedEmail != '' && request.auth.token.email_verified == true && resource.data.factoryAuthorizedEmail == request.auth.token.email)
+      ));
+      allow create: if isValidId(inventoryId) && isSignedIn() && isValidInventoryEntry(incoming()) && (
+        isAdmin()
+        || (
+          exists(/databases/$(database)/documents/factories/$(incoming().factoryId))
+          && exists(/databases/$(database)/documents/grades/$(incoming().gradeId))
+          && matchesParentFactory(incoming().factoryId, incoming().factoryOwnerUid, incoming().factoryAuthorizedEmail)
+        )
+      );
+      allow update: if isValidId(inventoryId) && isSignedIn() && isValidInventoryEntry(incoming()) && (
+        isAdmin()
+        || (
+          incoming().factoryId == existing().factoryId
+          && incoming().gradeId == existing().gradeId
+          && incoming().diff(existing()).affectedKeys().hasOnly(['quantityKg', 'note', 'updatedAt', 'updatedBy'])
+          && exists(/databases/$(database)/documents/factories/$(incoming().factoryId))
+          && matchesParentFactory(incoming().factoryId, incoming().factoryOwnerUid, incoming().factoryAuthorizedEmail)
+        )
+      );
+      allow delete: if isValidId(inventoryId) && isAdmin();
+    }
+
+    match /factoryPrices/{priceId} {
+      allow get: if isValidId(priceId) && isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isValidId(priceId) && isAdmin() && isValidFactoryPrice(incoming());
+      allow delete: if isValidId(priceId) && isAdmin();
+    }
+
+    match /inventoryLogs/{logId} {
+      allow get: if isValidId(logId) && (
+        isAdmin()
+        || (isSignedIn() && (
+          (existing().factoryOwnerUid != '' && existing().factoryOwnerUid == request.auth.uid)
+          || (existing().factoryAuthorizedEmail != '' && request.auth.token.email_verified == true && existing().factoryAuthorizedEmail == request.auth.token.email)
+        ))
+      );
+      allow list: if isAdmin() || (isSignedIn() && (
+        (resource.data.factoryOwnerUid != '' && resource.data.factoryOwnerUid == request.auth.uid)
+        || (resource.data.factoryAuthorizedEmail != '' && request.auth.token.email_verified == true && resource.data.factoryAuthorizedEmail == request.auth.token.email)
+      ));
+      allow create: if isValidId(logId) && isSignedIn() && isValidInventoryLog(incoming()) && (
+        isAdmin()
+        || (
+          incoming().actorRole == 'factory'
+          && exists(/databases/$(database)/documents/factories/$(incoming().factoryId))
+          && matchesParentFactory(incoming().factoryId, incoming().factoryOwnerUid, incoming().factoryAuthorizedEmail)
+        )
+      );
+      allow update, delete: if isValidId(logId) && isAdmin();
+    }
+
+    match /activityLogs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isValidId(logId) && isSignedIn() && isValidActivityLog(incoming()) && (
+        isAdmin()
+        || (
+          incoming().actorRole == 'factory'
+          && incoming().eventType in ['login', 'inventory_update']
+          && exists(/databases/$(database)/documents/factories/$(incoming().factoryId))
+          && matchesParentFactory(incoming().factoryId, incoming().factoryOwnerUid, incoming().factoryAuthorizedEmail)
+        )
+      );
+      allow update: if false;
+      allow delete: if isValidId(logId) && isAdmin();
+    }
+  }
+}
