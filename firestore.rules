@@ -240,10 +240,10 @@ service cloud.firestore {
           (uid == request.auth.uid
             && !exists(/databases/$(database)/documents/publicMeta/setup)
             && existsAfter(/databases/$(database)/documents/publicMeta/setup))
-          || isBootstrapAdmin()
+          || isAdmin()
         );
       allow update: if isValidId(uid) && isAdmin() && isValidAdminUser(incoming()) && incoming().createdAt == existing().createdAt;
-      allow delete: if isValidId(uid) && isBootstrapAdmin();
+      allow delete: if isValidId(uid) && isAdmin() && uid != request.auth.uid;
     }
 
     match /settings/{settingId} {

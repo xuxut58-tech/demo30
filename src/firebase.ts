@@ -7,7 +7,8 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 
-export const ADMIN_AUTH_EMAIL = 'admin@hq.durianvault.app';
+export const HQ_EMAIL_DOMAIN = 'hq.durianvault.app';
+export const ADMIN_AUTH_EMAIL = `admin@${HQ_EMAIL_DOMAIN}`;
 
 export enum OperationType {
   CREATE = 'create',
@@ -81,20 +82,30 @@ export function usernameToAuthEmail(username: string): string {
   return `${clean}@factory.durianvault.app`;
 }
 
-export async function provisionFactoryAuthUser(username: string, password: string): Promise<string> {
-  const secondaryName = `factoryProvisioner_${Date.now()}`;
+export function usernameToHqAuthEmail(username: string): string {
+  const clean = username.trim().toLowerCase();
+  if (clean.includes('@')) return clean;
+  return `${clean}@${HQ_EMAIL_DOMAIN}`;
+}
+
+async function provisionAuthUserByEmail(email: string, password: string): Promise<string> {
+  const secondaryName = `provisioner_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const secondaryApp = initializeApp(firebaseConfig, secondaryName);
   const secondaryAuth = getAuth(secondaryApp);
   try {
-    const cred = await createUserWithEmailAndPassword(
-      secondaryAuth,
-      usernameToAuthEmail(username),
-      password
-    );
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
     const uid = cred.user.uid;
     await signOut(secondaryAuth);
     return uid;
   } finally {
     await deleteApp(secondaryApp);
   }
+}
+
+export async function provisionFactoryAuthUser(username: string, password: string): Promise<string> {
+  return provisionAuthUserByEmail(usernameToAuthEmail(username), password);
+}
+
+export async function provisionHqAdminAuthUser(username: string, password: string): Promise<string> {
+  return provisionAuthUserByEmail(usernameToHqAuthEmail(username), password);
 }

@@ -24,9 +24,12 @@ import {
   auth,
   db,
   handleFirestoreError,
+  HQ_EMAIL_DOMAIN,
   OperationType,
   provisionFactoryAuthUser,
+  provisionHqAdminAuthUser,
   usernameToAuthEmail,
+  usernameToHqAuthEmail,
 } from './firebase';
 import type {
   ActivityEventType,
@@ -44,6 +47,12 @@ import type {
 
 const BOOTSTRAP_ADMIN_EMAIL = 'xuxut58@gmail.com';
 const recordedLoginsInMemory = new Set<string>();
+
+function currentAdminActorUsername(): string {
+  const email = auth.currentUser?.email || '';
+  if (!email || email === BOOTSTRAP_ADMIN_EMAIL) return 'admin';
+  return email.split('@')[0] || 'admin';
+}
 
 function tsToIso(val: unknown): string {
   if (val instanceof Timestamp) {
@@ -411,7 +420,11 @@ async function seedInitialFirestoreIfEmpty(): Promise<void> {
 export const api = {
   async checkSystemInitialized(): Promise<boolean> {
     try {
-      const snap = await getDoc(doc(db, 'publicMeta', 'setup'));
+      const timeout = new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), 3500);
+      });
+      const snap = await Promise.race([getDoc(doc(db, 'publicMeta', 'setup')), timeout]);
+      if (!snap) return true;
       return snap.exists();
     } catch {
       return true;
@@ -463,8 +476,25 @@ export const api = {
     if (!clean || !password) {
       throw new Error('Username and password are required');
     }
-    const email = usernameToAuthEmail(clean);
-    await signInWithEmailAndPassword(auth, email, password);
+    if (clean.includes('@')) {
+      await signInWithEmailAndPassword(auth, clean, password);
+      return;
+    }
+    const primaryEmail = usernameToAuthEmail(clean);
+    try {
+      await signInWithEmailAndPassword(auth, primaryEmail, password);
+    } catch (err) {
+      const code = (err as { code?: string })?.code || '';
+      const canFallbackToHq =
+        clean !== 'admin' &&
+        (code === 'auth/invalid-credential' ||
+          code === 'auth/user-not-found' ||
+          code === 'auth/wrong-password');
+      if (!canFallbackToHq) {
+        throw err;
+      }
+      await signInWithEmailAndPassword(auth, usernameToHqAuthEmail(clean), password);
+    }
   },
 
   async changeMainPassword(newPassword: string): Promise<void> {
@@ -474,6 +504,30 @@ export const api = {
       throw new Error('Password must be at least 6 characters');
     }
     await updatePassword(fbUser, newPassword);
+  },
+
+  async createHqAdmin(username: string, password: string): Promise<void> {
+    const clean = username.trim().toLowerCase();
+    if (!/^[a-z0-9_.-]{3,64}$/.test(clean)) {
+      throw new Error('Username must be 3-64 characters (a-z, 0-9, _, ., -)');
+    }
+    if (clean === 'admin') {
+      throw new Error('Username "admin" is already reserved for the primary HQ account');
+    }
+    if (password.length < 6) {
+      throw new Error('Password must be at least 6 characters');
+    }
+
+    const email = usernameToHqAuthEmail(clean);
+    const uid = await provisionHqAdminAuthUser(clean, password);
+    try {
+      await setDoc(doc(db, 'admins', uid), {
+        email,
+        createdAt: serverTimestamp(),
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `admins/${uid}`);
+    }
   },
 
   async logout(): Promise<void> {
@@ -505,11 +559,17 @@ export const api = {
         handleFirestoreError(err, OperationType.WRITE, 'admins/seed');
       }
 
+      const resolvedUsername = email.endsWith(`@${HQ_EMAIL_DOMAIN}`)
+        ? email.slice(0, email.indexOf('@'))
+        : email === BOOTSTRAP_ADMIN_EMAIL
+        ? 'admin'
+        : email.split('@')[0] || 'admin';
+
       return {
         uid: fbUser.uid,
         email,
         role: 'admin',
-        username: 'admin',
+        username: resolvedUsername,
       };
     }
 
@@ -793,6 +853,7 @@ export const api = {
         }
 
         let seq = 0;
+        const actorName = currentAdminActorUsername();
         for (const [factoryId, diffs] of changesByFactory.entries()) {
           const factory = factoryMap.get(factoryId);
           if (!factory) continue;
@@ -803,7 +864,7 @@ export const api = {
             data: makeActivityPayload({
               eventType: 'price_change',
               factory,
-              actorUsername: 'admin',
+              actorUsername: actorName,
               actorRole: 'admin',
               currency,
               details,
@@ -981,6 +1042,7 @@ export const api = {
     if (!fbUser) throw new Error('Authentication required');
 
     const gradeMap = new Map(grades.map((g) => [g.id, g.code]));
+    const actorName = currentAdminActorUsername();
 
     try {
       const batch = writeBatch(db);
@@ -1003,7 +1065,7 @@ export const api = {
           quantityKg: qty,
           note: item.note.trim().slice(0, 200),
           updatedAt: serverTimestamp(),
-          updatedBy: 'admin',
+          updatedBy: actorName.slice(0, 160),
         });
       }
 
@@ -1016,7 +1078,7 @@ export const api = {
         factoryNameVi: factory.nameVi,
         factoryOwnerUid: factory.ownerUid,
         factoryAuthorizedEmail: factory.authorizedEmail,
-        actorUsername: 'admin',
+        actorUsername: actorName.slice(0, 160),
         actorRole: 'admin',
         totalKg: Math.round(totalKg * 100) / 100,
         snapshot,
@@ -1031,7 +1093,7 @@ export const api = {
         makeActivityPayload({
           eventType: 'inventory_update',
           factory,
-          actorUsername: 'admin',
+          actorUsername: actorName,
           actorRole: 'admin',
           totalKg,
           details,
