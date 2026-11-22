@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Eye, EyeOff, Lock, ShieldCheck, User, Warehouse } from 'lucide-react';
+import { Eye, EyeOff, Lock, User } from 'lucide-react';
 import { api } from '../api';
 import { TRANSLATIONS } from '../i18n';
 import type { Lang } from '../types';
@@ -112,66 +112,11 @@ export function LoginView({ lang, onLangChange, externalError }: LoginViewProps)
         </div>
       </header>
 
-      {/* Main 2-column enterprise workspace */}
+      {/* Main centered account login card */}
       <main className="flex-1 flex items-center justify-center px-6 py-10">
-        <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
-          {/* Left column: Operational briefing */}
-          <div className="lg:col-span-7 flex flex-col justify-between bg-white border border-slate-200 rounded-xl p-8 lg:p-10">
-            <div>
-              <div className="text-xs font-medium text-emerald-700 tracking-wide mb-3">
-                {t.brandName} · Cold-Chain Network
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight leading-snug text-balance">
-                {t.loginHeroTitle}
-              </h1>
-              <p className="mt-4 text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl">
-                {t.loginHeroDesc}
-              </p>
-
-              <div className="mt-8 border-t border-slate-200 pt-8 space-y-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 text-slate-700">
-                    <Warehouse className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-900">{t.loginFeature1Title}</h2>
-                    <p className="mt-1 text-sm text-slate-600 leading-relaxed">{t.loginFeature1Desc}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 text-slate-700">
-                    <ShieldCheck className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-900">{t.loginFeature3Title}</h2>
-                    <p className="mt-1 text-sm text-slate-600 leading-relaxed">{t.loginFeature3Desc}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-4">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 text-slate-700">
-                    <Lock className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-900">{t.loginFeature2Title}</h2>
-                    <p className="mt-1 text-sm text-slate-600 leading-relaxed">{t.loginFeature2Desc}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8 pt-6 border-t border-slate-100 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-              <span>VN · TH · MY · CN</span>
-              <span aria-hidden="true">·</span>
-              <span>-18°C / -35°C IQF Pulp</span>
-              <span aria-hidden="true">·</span>
-              <span>CNY / USD / VND</span>
-            </div>
-          </div>
-
-          {/* Right column: Pure Account + Password Card */}
-          <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-8 lg:p-10 flex flex-col justify-center">
+        <div className="w-full max-w-md">
+          {/* Pure Account + Password Card */}
+          <div className="bg-white border border-slate-200 rounded-xl p-8 lg:p-10 flex flex-col justify-center">
             {checkingInit ? (
               <div className="space-y-4">
                 <div className="h-6 w-36 bg-slate-200 rounded animate-pulse" />
