@@ -38,7 +38,12 @@ function AppContent() {
   };
 
   useEffect(() => {
+    const fallbackTimer = window.setTimeout(() => {
+      setAuthReady(true);
+    }, 4000);
+
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      window.clearTimeout(fallbackTimer);
       if (!fbUser) {
         setUser(null);
         setAuthReady(true);
@@ -64,7 +69,10 @@ function AppContent() {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      unsubscribe();
+    };
   }, []);
 
   const handleLogout = () => {
