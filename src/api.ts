@@ -417,6 +417,8 @@ async function seedInitialFirestoreIfEmpty(): Promise<void> {
   }
 }
 
+let pendingSetupPromise: Promise<void> | null = null;
+
 export const api = {
   async checkSystemInitialized(): Promise<boolean> {
     try {
@@ -436,38 +438,61 @@ export const api = {
       throw new Error('Password must be at least 6 characters');
     }
 
-    let uid = '';
-    try {
-      const cred = await createUserWithEmailAndPassword(auth, ADMIN_AUTH_EMAIL, password);
-      uid = cred.user.uid;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('email-already-in-use')) {
-        const cred = await signInWithEmailAndPassword(auth, ADMIN_AUTH_EMAIL, password);
+    const runSetup = async () => {
+      let uid = '';
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, ADMIN_AUTH_EMAIL, password);
         uid = cred.user.uid;
-      } else {
-        throw err;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('email-already-in-use')) {
+          const cred = await signInWithEmailAndPassword(auth, ADMIN_AUTH_EMAIL, password);
+          uid = cred.user.uid;
+        } else {
+          throw err;
+        }
       }
-    }
 
-    try {
-      const setupRef = doc(db, 'publicMeta', 'setup');
-      const setupSnap = await getDoc(setupRef);
-      if (!setupSnap.exists()) {
-        const batch = writeBatch(db);
-        batch.set(doc(db, 'admins', uid), {
-          email: ADMIN_AUTH_EMAIL,
-          createdAt: serverTimestamp(),
-        });
-        batch.set(setupRef, {
-          initialized: true,
-          createdAt: serverTimestamp(),
-        });
-        await batch.commit();
+      try {
+        const setupRef = doc(db, 'publicMeta', 'setup');
+        const adminRef = doc(db, 'admins', uid);
+        const [setupSnap, adminSnap] = await Promise.all([getDoc(setupRef), getDoc(adminRef)]);
+        if (!setupSnap.exists()) {
+          const batch = writeBatch(db);
+          batch.set(adminRef, {
+            email: ADMIN_AUTH_EMAIL,
+            createdAt: serverTimestamp(),
+          });
+          batch.set(setupRef, {
+            initialized: true,
+            createdAt: serverTimestamp(),
+          });
+          await batch.commit();
+        } else if (!adminSnap.exists()) {
+          throw new Error(
+            'Main account was already initialized previously. Please sign in with your existing admin password.'
+          );
+        }
+        await seedInitialFirestoreIfEmpty();
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          err.message.includes('Main account was already initialized previously')
+        ) {
+          throw err;
+        }
+        handleFirestoreError(err, OperationType.WRITE, 'publicMeta/setup');
       }
-      await seedInitialFirestoreIfEmpty();
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'publicMeta/setup');
+    };
+
+    const setupTask = runSetup();
+    pendingSetupPromise = setupTask;
+    try {
+      await setupTask;
+    } finally {
+      if (pendingSetupPromise === setupTask) {
+        pendingSetupPromise = null;
+      }
     }
   },
 
@@ -535,6 +560,14 @@ export const api = {
   },
 
   async resolveAuthenticatedUser(fbUser: FirebaseUser): Promise<AuthUser | null> {
+    if (pendingSetupPromise) {
+      try {
+        await pendingSetupPromise;
+      } catch {
+        // Proceed with normal resolution
+      }
+    }
+
     const email = fbUser.email || '';
     const isBootstrap = fbUser.emailVerified && email === BOOTSTRAP_ADMIN_EMAIL;
 
@@ -544,6 +577,28 @@ export const api = {
       isListedAdmin = adminDoc.exists();
     } catch {
       isListedAdmin = false;
+    }
+
+    if (!isBootstrap && !isListedAdmin && email === ADMIN_AUTH_EMAIL) {
+      try {
+        const setupRef = doc(db, 'publicMeta', 'setup');
+        const setupSnap = await getDoc(setupRef);
+        if (!setupSnap.exists()) {
+          const batch = writeBatch(db);
+          batch.set(doc(db, 'admins', fbUser.uid), {
+            email: ADMIN_AUTH_EMAIL,
+            createdAt: serverTimestamp(),
+          });
+          batch.set(setupRef, {
+            initialized: true,
+            createdAt: serverTimestamp(),
+          });
+          await batch.commit();
+          isListedAdmin = true;
+        }
+      } catch {
+        isListedAdmin = false;
+      }
     }
 
     if (isBootstrap || isListedAdmin) {
