@@ -41,6 +41,7 @@ import type {
   FactoryPrice,
   FactoryWorkspaceData,
   Grade,
+  GradeUnitType,
   InventoryItem,
   InventoryLog,
 } from './types';
@@ -96,6 +97,7 @@ function mapGrade(id: string, d: Record<string, unknown>): Grade {
     specZh: String(d.specZh ?? ''),
     specEn: String(d.specEn ?? ''),
     specVi: String(d.specVi ?? ''),
+    unitType: d.unitType === 'case20kg' ? 'case20kg' : 'kg',
     sortOrder: Number(d.sortOrder ?? 0),
     isActive: d.isActive !== false,
     updatedAt: tsToIso(d.updatedAt),
@@ -339,6 +341,7 @@ async function seedInitialFirestoreIfEmpty(): Promise<void> {
         specZh: g.specZh,
         specEn: g.specEn,
         specVi: g.specVi,
+        unitType: 'kg',
         sortOrder: g.sortOrder,
         isActive: true,
         updatedAt: serverTimestamp(),
@@ -1170,6 +1173,7 @@ export const api = {
     specZh: string;
     specEn: string;
     specVi: string;
+    unitType?: GradeUnitType;
     sortOrder: number;
   }): Promise<void> {
     const cleanCode = payload.code.trim().toUpperCase().replace(/[^A-Za-z0-9_-]/g, '');
@@ -1188,6 +1192,7 @@ export const api = {
         specZh: payload.specZh.trim().slice(0, 160),
         specEn: (payload.specEn || payload.specZh).trim().slice(0, 160),
         specVi: (payload.specVi || payload.specEn || payload.specZh).trim().slice(0, 160),
+        unitType: payload.unitType === 'case20kg' ? 'case20kg' : 'kg',
         sortOrder: payload.sortOrder,
         isActive: true,
         updatedAt: serverTimestamp(),
@@ -1206,6 +1211,7 @@ export const api = {
       specZh: string;
       specEn: string;
       specVi: string;
+      unitType: GradeUnitType;
       isActive: boolean;
     }
   ): Promise<void> {
@@ -1217,7 +1223,19 @@ export const api = {
         specZh: payload.specZh.trim().slice(0, 160),
         specEn: (payload.specEn || payload.specZh).trim().slice(0, 160),
         specVi: (payload.specVi || payload.specEn || payload.specZh).trim().slice(0, 160),
+        unitType: payload.unitType === 'case20kg' ? 'case20kg' : 'kg',
         isActive: payload.isActive,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `grades/${grade.id}`);
+    }
+  },
+
+  async updateGradeUnit(grade: Grade, unitType: GradeUnitType): Promise<void> {
+    try {
+      await updateDoc(doc(db, 'grades', grade.id), {
+        unitType: unitType === 'case20kg' ? 'case20kg' : 'kg',
         updatedAt: serverTimestamp(),
       });
     } catch (err) {

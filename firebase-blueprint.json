@@ -42,6 +42,7 @@
         "specZh": { "type": "string", "maxLength": 160 },
         "specEn": { "type": "string", "maxLength": 160 },
         "specVi": { "type": "string", "maxLength": 160 },
+        "unitType": { "type": "string", "enum": ["kg", "case20kg"] },
         "sortOrder": { "type": "number" },
         "isActive": { "type": "boolean" },
         "updatedAt": { "type": "string", "format": "date-time" }

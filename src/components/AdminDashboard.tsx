@@ -23,14 +23,26 @@ import { api } from '../api';
 import {
   currencySymbol,
   formatCurrency,
+  formatGradeInputNumber,
+  formatPieceCount,
   formatWeightKg,
   formatWeightTons,
   getLocalizedFactoryName,
   getLocalizedGradeName,
   getLocalizedGradeSpec,
+  inputQuantityToKg,
   TRANSLATIONS,
 } from '../i18n';
-import type { ActivityEventType, ActivityLog, AdminOverviewData, Currency, Factory, Grade, Lang } from '../types';
+import type {
+  ActivityEventType,
+  ActivityLog,
+  AdminOverviewData,
+  Currency,
+  Factory,
+  Grade,
+  GradeUnitType,
+  Lang,
+} from '../types';
 import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface AdminDashboardProps {
@@ -117,8 +129,10 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
   const [gSpecZh, setGSpecZh] = useState('');
   const [gSpecEn, setGSpecEn] = useState('');
   const [gSpecVi, setGSpecVi] = useState('');
+  const [gUnitType, setGUnitType] = useState<GradeUnitType>('kg');
   const [gActive, setGActive] = useState(true);
   const [savingGrade, setSavingGrade] = useState(false);
+  const [updatingUnitGradeId, setUpdatingUnitGradeId] = useState<string | null>(null);
 
   const showNotice = (msg: string) => {
     setNotice(msg);
@@ -601,7 +615,9 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
       [
         t.gradeCode,
         t.colGrade,
+        t.colGradeUnit,
         `${t.colTotalWeight} (kg)`,
+        `${t.unitShortCase} (${t.unitCaseSpec})`,
         `${t.colTotalWeight} (${t.unitTon})`,
         `${t.weightedAvgPrice} (${draftCurrency})`,
         `${t.colEstValue} (${draftCurrency})`,
@@ -614,7 +630,9 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
       s3Rows.push([
         g.code,
         getLocalizedGradeName(g, lang),
+        g.unitType === 'case20kg' ? t.unitCaseSpec : t.unitShortKg,
         gKg,
+        g.unitType === 'case20kg' ? Math.round((gKg / 20) * 100) / 100 : '',
         Math.round((gKg / 1000) * 100) / 100,
         avgP,
         Math.round(gVal * 100) / 100,
@@ -637,7 +655,7 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
     const nMap: Record<string, string> = {};
     for (const g of activeGrades) {
       const entry = fMap?.get(g.id);
-      qMap[g.id] = entry ? String(entry.quantityKg) : '0';
+      qMap[g.id] = entry ? formatGradeInputNumber(entry.quantityKg, g.unitType) : '0';
       pMap[g.id] = String(effectiveUnitPrice(factory.id, g.id));
       nMap[g.id] = entry ? entry.note : '';
     }
@@ -656,7 +674,7 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
         const parsed = Number(adjustQuantities[g.id] || 0);
         return {
           gradeId: g.id,
-          quantityKg: Number.isFinite(parsed) && parsed >= 0 ? parsed : 0,
+          quantityKg: inputQuantityToKg(parsed, g.unitType),
           note: adjustNotes[g.id] || '',
         };
       });
@@ -827,6 +845,7 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
   };
 
   const openCreateGradeModal = () => {
+    setError('');
     setEditingGrade(null);
     setGCode('');
     setGNameZh('');
@@ -835,11 +854,13 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
     setGSpecZh('');
     setGSpecEn('');
     setGSpecVi('');
+    setGUnitType('kg');
     setGActive(true);
     setGradeModalOpen(true);
   };
 
   const openEditGradeModal = (g: Grade) => {
+    setError('');
     setEditingGrade(g);
     setGCode(g.code);
     setGNameZh(g.nameZh);
@@ -848,6 +869,7 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
     setGSpecZh(g.specZh);
     setGSpecEn(g.specEn);
     setGSpecVi(g.specVi);
+    setGUnitType(g.unitType);
     setGActive(g.isActive);
     setGradeModalOpen(true);
   };
@@ -865,6 +887,7 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
           specZh: gSpecZh,
           specEn: gSpecEn,
           specVi: gSpecVi,
+          unitType: gUnitType,
           isActive: gActive,
         });
       } else {
@@ -877,6 +900,7 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
           specZh: gSpecZh,
           specEn: gSpecEn,
           specVi: gSpecVi,
+          unitType: gUnitType,
           sortOrder: nextOrder,
         });
       }
@@ -886,6 +910,30 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
       setError(err instanceof Error ? err.message : t.errorGeneric);
     } finally {
       setSavingGrade(false);
+    }
+  };
+
+  const handleQuickSwitchGradeUnit = async (grade: Grade, nextUnit: GradeUnitType) => {
+    if (grade.unitType === nextUnit || updatingUnitGradeId === grade.id) return;
+    setError('');
+    setUpdatingUnitGradeId(grade.id);
+    try {
+      await api.updateGradeUnit(grade, nextUnit);
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              grades: prev.grades.map((item) =>
+                item.id === grade.id ? { ...item, unitType: nextUnit } : item
+              ),
+            }
+          : prev
+      );
+      showNotice(`${grade.code} · ${t.gradeUnitUpdated}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.errorGeneric);
+    } finally {
+      setUpdatingUnitGradeId(null);
     }
   };
 
@@ -1202,7 +1250,9 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
                         {activeGrades.map((g) => (
                           <th key={g.id} className="py-3 px-3 text-right whitespace-nowrap">
                             <div className="font-mono text-slate-900">{g.code}</div>
-                            <div className="text-[11px] font-normal text-slate-500">kg</div>
+                            <div className="text-[11px] font-normal text-slate-500">
+                              {g.unitType === 'case20kg' ? t.unitCaseSpec : t.unitShortKg}
+                            </div>
                           </th>
                         ))}
                         <th className="py-3 px-4 text-right whitespace-nowrap">{t.colTotalWeight}</th>
@@ -1259,14 +1309,22 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
                               {activeGrades.map((g) => {
                                 const qty = fMap?.get(g.id)?.quantityKg ?? 0;
                                 const unitP = effectiveUnitPrice(factory.id, g.id);
+                                const isCase20 = g.unitType === 'case20kg';
                                 return (
                                   <td
                                     key={g.id}
                                     className="py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap"
                                   >
                                     <div className={qty > 0 ? 'text-slate-900' : 'text-slate-300'}>
-                                      {formatWeightKg(qty)}
+                                      {isCase20
+                                        ? `${formatPieceCount(qty)} ${t.unitShortCase}`
+                                        : formatWeightKg(qty)}
                                     </div>
+                                    {isCase20 && (
+                                      <div className="text-[10px] text-slate-400">
+                                        {formatWeightKg(qty)} kg
+                                      </div>
+                                    )}
                                     {unitP > 0 && (
                                       <div className="text-[10px] text-slate-400">
                                         {currencySymbol(draftCurrency)}{unitP}
@@ -1311,11 +1369,23 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
                       <tfoot className="bg-slate-50 border-t-2 border-slate-200 text-xs">
                         <tr>
                           <td className="py-3 px-5 font-semibold text-slate-900">{t.rowTotalWeight}</td>
-                          {activeGrades.map((g) => (
-                            <td key={g.id} className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-slate-900">
-                              {formatWeightKg(filteredTotals.gradeTotalsKg.get(g.id) ?? 0)}
-                            </td>
-                          ))}
+                          {activeGrades.map((g) => {
+                            const gKg = filteredTotals.gradeTotalsKg.get(g.id) ?? 0;
+                            return (
+                              <td key={g.id} className="py-3 px-3 text-right font-mono tabular-nums font-semibold text-slate-900">
+                                {g.unitType === 'case20kg' ? (
+                                  <>
+                                    <div>{formatPieceCount(gKg)} {t.unitShortCase}</div>
+                                    <div className="text-[10px] font-normal text-slate-500">
+                                      {formatWeightKg(gKg)} kg
+                                    </div>
+                                  </>
+                                ) : (
+                                  formatWeightKg(gKg)
+                                )}
+                              </td>
+                            );
+                          })}
                           <td className="py-3 px-4 text-right font-mono tabular-nums font-bold text-slate-900">
                             {formatWeightKg(filteredTotals.totalKg)} kg
                           </td>
@@ -1601,7 +1671,9 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
                                   className="w-24 px-2.5 py-1.5 text-right font-mono tabular-nums text-xs font-medium bg-white border border-slate-300 rounded-md text-slate-900 focus:outline-none focus:border-emerald-700"
                                 />
                                 <div className="mt-0.5 text-[10px] font-mono tabular-nums text-slate-400">
-                                  {formatWeightKg(qty)} kg
+                                  {g.unitType === 'case20kg'
+                                    ? `${formatPieceCount(qty)} ${t.unitShortCase} · ${formatWeightKg(qty)} kg`
+                                    : `${formatWeightKg(qty)} kg`}
                                 </div>
                               </td>
                             );
@@ -1755,6 +1827,7 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
                 <div>
                   <h1 className="text-base font-bold text-slate-900">{t.gradesTitle}</h1>
                   <p className="text-xs text-slate-500 mt-1">{t.gradesDesc}</p>
+                  <p className="text-[11px] text-emerald-700 mt-1">{t.gradeUnitHint}</p>
                 </div>
                 <button
                   type="button"
@@ -1772,40 +1845,72 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-medium">
                       <th className="py-3 px-5">{t.gradeCode}</th>
                       <th className="py-3 px-4">{t.colGrade}</th>
+                      <th className="py-3 px-4 whitespace-nowrap">{t.colGradeUnit}</th>
                       <th className="py-3 px-4">{t.colStatus}</th>
                       <th className="py-3 px-5 text-right">{t.colActions}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    {data.grades.map((g) => (
-                      <tr key={g.id} className="hover:bg-slate-50/70">
-                        <td className="py-3.5 px-5 font-mono font-semibold text-emerald-700 whitespace-nowrap">
-                          {g.code}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <div className="font-semibold text-slate-900">{g.nameZh}</div>
-                          <div className="text-slate-600 mt-0.5">
-                            {g.nameEn} · {g.nameVi}
-                          </div>
-                          <div className="text-slate-400 mt-0.5">{getLocalizedGradeSpec(g, lang)}</div>
-                        </td>
-                        <td className="py-3.5 px-4 whitespace-nowrap">
-                          <span className={g.isActive ? 'text-emerald-700 font-medium' : 'text-slate-400'}>
-                            {g.isActive ? t.statusActive : t.statusDisabled}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => openEditGradeModal(g)}
-                            className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-900 font-medium cursor-pointer"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                            <span>{t.editGrade}</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {data.grades.map((g) => {
+                      const isUnitSaving = updatingUnitGradeId === g.id;
+                      return (
+                        <tr key={g.id} className="hover:bg-slate-50/70">
+                          <td className="py-3.5 px-5 font-mono font-semibold text-emerald-700 whitespace-nowrap">
+                            {g.code}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="font-semibold text-slate-900">{g.nameZh}</div>
+                            <div className="text-slate-600 mt-0.5">
+                              {g.nameEn} · {g.nameVi}
+                            </div>
+                            <div className="text-slate-400 mt-0.5">{getLocalizedGradeSpec(g, lang)}</div>
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <div className="inline-flex items-center p-0.5 bg-slate-100 border border-slate-200 rounded-lg">
+                              <button
+                                type="button"
+                                disabled={isUnitSaving}
+                                onClick={() => void handleQuickSwitchGradeUnit(g, 'kg')}
+                                className={`px-2.5 py-1 text-[11px] font-mono font-medium rounded-md transition-colors cursor-pointer disabled:opacity-60 ${
+                                  g.unitType === 'kg'
+                                    ? 'bg-white text-slate-900 shadow-xs'
+                                    : 'text-slate-500 hover:text-slate-900'
+                                }`}
+                              >
+                                {t.unitShortKg}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isUnitSaving}
+                                onClick={() => void handleQuickSwitchGradeUnit(g, 'case20kg')}
+                                className={`px-2.5 py-1 text-[11px] font-mono font-medium rounded-md transition-colors cursor-pointer disabled:opacity-60 ${
+                                  g.unitType === 'case20kg'
+                                    ? 'bg-emerald-700 text-white shadow-xs'
+                                    : 'text-slate-500 hover:text-slate-900'
+                                }`}
+                              >
+                                {t.unitCaseSpec}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <span className={g.isActive ? 'text-emerald-700 font-medium' : 'text-slate-400'}>
+                              {g.isActive ? t.statusActive : t.statusDisabled}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => openEditGradeModal(g)}
+                              className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-900 font-medium cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              <span>{t.editGrade}</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2002,57 +2107,81 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
                 <div className="sm:col-span-3">{t.colGradeNote}</div>
               </div>
 
-              {activeGrades.map((g) => (
-                <div
-                  key={g.id}
-                  className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center pb-3 border-b border-slate-100 last:border-0"
-                >
-                  <div className="sm:col-span-4">
-                    <div className="text-xs font-semibold text-slate-900">
-                      <span className="font-mono text-emerald-700 mr-1.5">{g.code}</span>
-                      {getLocalizedGradeName(g, lang)}
+              {activeGrades.map((g) => {
+                const isCase20 = g.unitType === 'case20kg';
+                const parsedQty = Number(adjustQuantities[g.id] || 0);
+                const convertedKg = inputQuantityToKg(parsedQty, g.unitType);
+                return (
+                  <div
+                    key={g.id}
+                    className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center pb-3 border-b border-slate-100 last:border-0"
+                  >
+                    <div className="sm:col-span-4">
+                      <div className="text-xs font-semibold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono text-emerald-700">{g.code}</span>
+                        <span>{getLocalizedGradeName(g, lang)}</span>
+                        <span
+                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                            isCase20
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-slate-50 text-slate-600 border-slate-200'
+                          }`}
+                        >
+                          {isCase20 ? t.unitCaseSpec : t.unitShortKg}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={adjustQuantities[g.id] ?? '0'}
+                          onChange={(e) =>
+                            setAdjustQuantities((prev) => ({ ...prev, [g.id]: e.target.value }))
+                          }
+                          className="w-full pl-2.5 pr-8 py-1.5 text-right font-mono tabular-nums text-xs border border-slate-300 rounded-lg"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 pointer-events-none">
+                          {isCase20 ? t.unitShortCase : t.unitShortKg}
+                        </span>
+                      </div>
+                      {isCase20 && (
+                        <div className="mt-0.5 text-[10px] font-mono text-slate-400 text-right">
+                          = {formatWeightKg(convertedKg)} kg
+                        </div>
+                      )}
+                    </div>
+                    <div className="sm:col-span-3 relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-mono text-slate-400">
+                        {currencySymbol(draftCurrency)}
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={adjustPrices[g.id] ?? '0'}
+                        onChange={(e) =>
+                          setAdjustPrices((prev) => ({ ...prev, [g.id]: e.target.value }))
+                        }
+                        className="w-full pl-6 pr-2.5 py-1.5 text-right font-mono tabular-nums text-xs border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <input
+                        type="text"
+                        value={adjustNotes[g.id] ?? ''}
+                        onChange={(e) =>
+                          setAdjustNotes((prev) => ({ ...prev, [g.id]: e.target.value }))
+                        }
+                        placeholder={t.colGradeNote}
+                        className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg"
+                      />
                     </div>
                   </div>
-                  <div className="sm:col-span-2">
-                    <input
-                      type="number"
-                      min={0}
-                      step="any"
-                      value={adjustQuantities[g.id] ?? '0'}
-                      onChange={(e) =>
-                        setAdjustQuantities((prev) => ({ ...prev, [g.id]: e.target.value }))
-                      }
-                      className="w-full px-2.5 py-1.5 text-right font-mono tabular-nums text-xs border border-slate-300 rounded-lg"
-                    />
-                  </div>
-                  <div className="sm:col-span-3 relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-mono text-slate-400">
-                      {currencySymbol(draftCurrency)}
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
-                      step="any"
-                      value={adjustPrices[g.id] ?? '0'}
-                      onChange={(e) =>
-                        setAdjustPrices((prev) => ({ ...prev, [g.id]: e.target.value }))
-                      }
-                      className="w-full pl-6 pr-2.5 py-1.5 text-right font-mono tabular-nums text-xs border border-slate-300 rounded-lg"
-                    />
-                  </div>
-                  <div className="sm:col-span-3">
-                    <input
-                      type="text"
-                      value={adjustNotes[g.id] ?? ''}
-                      onChange={(e) =>
-                        setAdjustNotes((prev) => ({ ...prev, [g.id]: e.target.value }))
-                      }
-                      placeholder={t.colGradeNote}
-                      className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg"
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -2337,6 +2466,34 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
                 </div>
               </div>
 
+              <div>
+                <label className="block font-medium text-slate-700 mb-1.5">{t.colGradeUnit}</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGUnitType('kg')}
+                    className={`px-3 py-2 text-xs font-medium rounded-lg border text-center cursor-pointer transition-colors ${
+                      gUnitType === 'kg'
+                        ? 'bg-emerald-50 border-emerald-700 text-emerald-800'
+                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {t.unitTypeKg}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGUnitType('case20kg')}
+                    className={`px-3 py-2 text-xs font-medium rounded-lg border text-center cursor-pointer transition-colors ${
+                      gUnitType === 'case20kg'
+                        ? 'bg-emerald-50 border-emerald-700 text-emerald-800'
+                        : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {t.unitTypeCase20}
+                  </button>
+                </div>
+              </div>
+
               {editingGrade && (
                 <label className="flex items-center gap-2 pt-1 cursor-pointer">
                   <input
@@ -2347,6 +2504,11 @@ export function AdminDashboard({ adminUsername, lang, onLangChange, onLogout }: 
                   />
                   <span className="text-slate-700">{t.gradeActiveLabel}</span>
                 </label>
+              )}
+              {error && (
+                <div className="p-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg">
+                  {error}
+                </div>
               )}
             </div>
 

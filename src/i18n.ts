@@ -1,4 +1,4 @@
-import type { Currency, Factory, Grade, Lang } from './types';
+import type { Currency, Factory, Grade, GradeUnitType, Lang } from './types';
 
 export function getLocalizedFactoryName(f: Pick<Factory, 'nameZh' | 'nameEn' | 'nameVi'>, lang: Lang): string {
   if (lang === 'zh') return f.nameZh;
@@ -34,6 +34,30 @@ export function formatWeightKg(kg: number): string {
 
 export function formatWeightTons(kg: number): string {
   return (kg / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export const CASE_20KG_WEIGHT = 20;
+
+export function getGradeUnitFactor(unitType?: GradeUnitType): number {
+  return unitType === 'case20kg' ? CASE_20KG_WEIGHT : 1;
+}
+
+export function formatPieceCount(kg: number): string {
+  return (kg / CASE_20KG_WEIGHT).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+export function formatGradeInputNumber(kg: number, unitType?: GradeUnitType): string {
+  const factor = getGradeUnitFactor(unitType);
+  const val = Math.round((kg / factor) * 100) / 100;
+  return String(val);
+}
+
+export function inputQuantityToKg(inputVal: number, unitType?: GradeUnitType): number {
+  if (!Number.isFinite(inputVal) || inputVal <= 0) return 0;
+  return Math.round(inputVal * getGradeUnitFactor(unitType) * 100) / 100;
 }
 
 export function currencySymbol(currency: Currency): string {
@@ -224,6 +248,14 @@ export const TRANSLATIONS = {
     hqAdminCreatedNotice: '新主账号已创建，可直接使用该用户名与密码登录',
     envPasscodeNotice: '当前主账号密码由环境变量 ADMIN_PASSCODE 托管，如需更改请在系统 Secrets 中修改。',
     passwordUpdated: '密码已更新',
+    colGradeUnit: '计量单位',
+    unitTypeKg: '公斤 (kg)',
+    unitTypeCase20: '20kg/件 (按件数)',
+    unitShortKg: 'kg',
+    unitShortCase: '件',
+    unitCaseSpec: '20kg/件',
+    gradeUnitHint: '可随时在列表中直接切换各级别的计量单位（kg 或 20kg/件）；按件录入时系统会自动按 1 件 = 20 kg 换算库存总重与货值。',
+    gradeUnitUpdated: '级别计量单位已更新',
     invalidCredentialError: '账号或密码错误，或该账号尚未创建。如果是隐藏主账号，请先用 admin 登录后在左侧「新增主账号」中创建。',
     errorGeneric: '操作失败，请检查输入并重试',
   },
@@ -408,6 +440,14 @@ export const TRANSLATIONS = {
     hqAdminCreatedNotice: 'Secondary HQ admin created and ready to sign in',
     envPasscodeNotice: 'Main password is managed via ADMIN_PASSCODE environment secret.',
     passwordUpdated: 'Password updated',
+    colGradeUnit: 'Unit',
+    unitTypeKg: 'Kilogram (kg)',
+    unitTypeCase20: '20kg/ctn (pcs)',
+    unitShortKg: 'kg',
+    unitShortCase: 'ctn',
+    unitCaseSpec: '20kg/ctn',
+    gradeUnitHint: 'Switch each grade between kg and 20kg/ctn directly in the table. Piece counts automatically convert at 1 ctn = 20 kg for totals and valuations.',
+    gradeUnitUpdated: 'Grade unit updated',
     invalidCredentialError: 'Incorrect username or password, or account not created yet. To add a hidden HQ admin, sign in as admin first and use "Add HQ Admin".',
     errorGeneric: 'Operation failed, please verify inputs and retry',
   },
@@ -592,6 +632,14 @@ export const TRANSLATIONS = {
     hqAdminCreatedNotice: 'Đã tạo tài khoản chính mới, có thể đăng nhập ngay',
     envPasscodeNotice: 'Mật khẩu tài khoản chính đang được quản lý qua biến môi trường ADMIN_PASSCODE.',
     passwordUpdated: 'Đã cập nhật mật khẩu',
+    colGradeUnit: 'Đơn vị tính',
+    unitTypeKg: 'Kilôgam (kg)',
+    unitTypeCase20: '20kg/thùng (thùng)',
+    unitShortKg: 'kg',
+    unitShortCase: 'thùng',
+    unitCaseSpec: '20kg/thùng',
+    gradeUnitHint: 'Chuyển đổi từng phân loại giữa kg và 20kg/thùng ngay trong bảng. Hệ thống tự quy đổi 1 thùng = 20 kg khi tính tổng khối lượng và giá trị.',
+    gradeUnitUpdated: 'Đã cập nhật đơn vị phân loại',
     invalidCredentialError: 'Sai tài khoản/mật khẩu hoặc tài khoản chưa được tạo. Để thêm tài khoản chính ẩn, hãy đăng nhập bằng admin trước rồi chọn "Thêm tài khoản chính".',
     errorGeneric: 'Thao tác thất bại, vui lòng kiểm tra lại',
   },

@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, ClipboardList, History, LogOut, PackageCheck, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import {
+  formatGradeInputNumber,
+  formatPieceCount,
   formatWeightKg,
   formatWeightTons,
   getLocalizedFactoryName,
   getLocalizedGradeName,
   getLocalizedGradeSpec,
+  inputQuantityToKg,
   TRANSLATIONS,
 } from '../i18n';
 import type { Factory, FactoryWorkspaceData, Lang } from '../types';
@@ -44,7 +47,7 @@ export function FactoryPortal({ factory, lang, onLangChange, onLogout }: Factory
       const nMap: Record<string, string> = {};
       for (const g of ws.grades) {
         const inv = ws.inventory.find((i) => i.gradeId === g.id);
-        qMap[g.id] = inv ? String(inv.quantityKg) : '0';
+        qMap[g.id] = inv ? formatGradeInputNumber(inv.quantityKg, g.unitType) : '0';
         nMap[g.id] = inv ? inv.note : '';
       }
       setQuantities(qMap);
@@ -60,11 +63,21 @@ export function FactoryPortal({ factory, lang, onLangChange, onLogout }: Factory
     void loadWorkspace();
   }, [factory.id]);
 
+  const gradeUnitByCode = useMemo(() => {
+    const map = new Map<string, 'kg' | 'case20kg'>();
+    if (data) {
+      for (const g of data.grades) {
+        map.set(g.code, g.unitType);
+      }
+    }
+    return map;
+  }, [data]);
+
   const totalKg = useMemo(() => {
     if (!data) return 0;
     return data.grades.reduce((sum, g) => {
       const val = Number(quantities[g.id] || 0);
-      return sum + (Number.isFinite(val) && val > 0 ? val : 0);
+      return sum + inputQuantityToKg(val, g.unitType);
     }, 0);
   }, [data, quantities]);
 
@@ -77,7 +90,7 @@ export function FactoryPortal({ factory, lang, onLangChange, onLogout }: Factory
   const adjustQuantity = (gradeId: string, delta: number) => {
     setQuantities((prev) => {
       const current = Number(prev[gradeId] || 0);
-      const next = Math.max(0, (Number.isFinite(current) ? current : 0) + delta);
+      const next = Math.round(Math.max(0, (Number.isFinite(current) ? current : 0) + delta) * 100) / 100;
       return { ...prev, [gradeId]: String(next) };
     });
   };
@@ -92,7 +105,7 @@ export function FactoryPortal({ factory, lang, onLangChange, onLogout }: Factory
         const parsed = Number(quantities[g.id] || 0);
         return {
           gradeId: g.id,
-          quantityKg: Number.isFinite(parsed) && parsed >= 0 ? parsed : 0,
+          quantityKg: inputQuantityToKg(parsed, g.unitType),
           note: gradeNotes[g.id] || '',
         };
       });
@@ -323,17 +336,27 @@ export function FactoryPortal({ factory, lang, onLangChange, onLogout }: Factory
                     </thead>
                     <tbody className="divide-y divide-slate-200 text-sm">
                       {data.grades.map((grade) => {
-                        const qtyNum = Number(quantities[grade.id] || 0);
-                        const safeQty = Number.isFinite(qtyNum) && qtyNum >= 0 ? qtyNum : 0;
+                        const rawNum = Number(quantities[grade.id] || 0);
+                        const isCase20 = grade.unitType === 'case20kg';
+                        const safeKg = inputQuantityToKg(rawNum, grade.unitType);
                         return (
                           <tr key={grade.id} className="hover:bg-slate-50/70 transition-colors">
                             <td className="py-4 px-6">
-                              <div className="flex items-baseline gap-2.5">
+                              <div className="flex items-baseline gap-2.5 flex-wrap">
                                 <span className="font-mono text-xs font-semibold text-emerald-700">
                                   {grade.code}
                                 </span>
                                 <span className="font-semibold text-slate-900">
                                   {getLocalizedGradeName(grade, lang)}
+                                </span>
+                                <span
+                                  className={`text-[11px] font-mono px-1.5 py-0.5 rounded border ${
+                                    isCase20
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                      : 'bg-slate-50 text-slate-600 border-slate-200'
+                                  }`}
+                                >
+                                  {isCase20 ? t.unitCaseSpec : t.unitShortKg}
                                 </span>
                               </div>
                               <div className="mt-1 text-xs text-slate-500">
@@ -343,37 +366,72 @@ export function FactoryPortal({ factory, lang, onLangChange, onLogout }: Factory
 
                             <td className="py-4 px-4">
                               <div className="flex items-center justify-end gap-1.5">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  step="any"
-                                  value={quantities[grade.id] ?? '0'}
-                                  onChange={(e) =>
-                                    setQuantities((prev) => ({ ...prev, [grade.id]: e.target.value }))
-                                  }
-                                  className="w-32 px-3 py-2 text-right font-mono tabular-nums text-sm font-medium bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-emerald-700"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => adjustQuantity(grade.id, 100)}
-                                  className="px-2 py-2 text-xs font-mono text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md cursor-pointer shrink-0"
-                                  title="+100 kg"
-                                >
-                                  +100
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => adjustQuantity(grade.id, 1000)}
-                                  className="px-2 py-2 text-xs font-mono text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md cursor-pointer shrink-0"
-                                  title="+1000 kg"
-                                >
-                                  +1t
-                                </button>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="any"
+                                    value={quantities[grade.id] ?? '0'}
+                                    onChange={(e) =>
+                                      setQuantities((prev) => ({ ...prev, [grade.id]: e.target.value }))
+                                    }
+                                    className="w-32 pl-3 pr-10 py-2 text-right font-mono tabular-nums text-sm font-medium bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-emerald-700"
+                                  />
+                                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-mono text-slate-400 pointer-events-none">
+                                    {isCase20 ? t.unitShortCase : t.unitShortKg}
+                                  </span>
+                                </div>
+                                {isCase20 ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustQuantity(grade.id, 10)}
+                                      className="px-2 py-2 text-xs font-mono text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md cursor-pointer shrink-0"
+                                      title={`+10 ${t.unitShortCase}`}
+                                    >
+                                      +10
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustQuantity(grade.id, 50)}
+                                      className="px-2 py-2 text-xs font-mono text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md cursor-pointer shrink-0"
+                                      title={`+50 ${t.unitShortCase} (+1t)`}
+                                    >
+                                      +50
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustQuantity(grade.id, 100)}
+                                      className="px-2 py-2 text-xs font-mono text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md cursor-pointer shrink-0"
+                                      title="+100 kg"
+                                    >
+                                      +100
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustQuantity(grade.id, 1000)}
+                                      className="px-2 py-2 text-xs font-mono text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md cursor-pointer shrink-0"
+                                      title="+1000 kg"
+                                    >
+                                      +1t
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </td>
 
                             <td className="py-4 px-4 text-right font-mono tabular-nums text-slate-600">
-                              {formatWeightTons(safeQty)} t
+                              {isCase20 && (
+                                <div className="text-xs font-medium text-slate-800">
+                                  {formatWeightKg(safeKg)} kg
+                                </div>
+                              )}
+                              <div className={isCase20 ? 'text-[11px] text-slate-400' : ''}>
+                                {formatWeightTons(safeKg)} t
+                              </div>
                             </td>
 
                             <td className="py-4 px-6">
@@ -465,7 +523,15 @@ export function FactoryPortal({ factory, lang, onLangChange, onLogout }: Factory
                           </td>
                           <td className="py-3 px-6 text-slate-600">
                             <div className="font-mono tabular-nums">
-                              {log.snapshot.map((s) => `${s.code}: ${formatWeightKg(s.quantityKg)}`).join(' · ')}
+                              {log.snapshot
+                                .map((s) => {
+                                  const unit = gradeUnitByCode.get(s.code);
+                                  if (unit === 'case20kg') {
+                                    return `${s.code}: ${formatPieceCount(s.quantityKg)}${t.unitShortCase} (${formatWeightKg(s.quantityKg)}kg)`;
+                                  }
+                                  return `${s.code}: ${formatWeightKg(s.quantityKg)}`;
+                                })
+                                .join(' · ')}
                             </div>
                             {log.note && <div className="mt-1 text-slate-500">{log.note}</div>}
                           </td>

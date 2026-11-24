@@ -1,6 +1,7 @@
 export type Lang = 'zh' | 'en' | 'vi';
 export type Currency = 'CNY' | 'USD' | 'VND';
 export type ActivityEventType = 'login' | 'inventory_update' | 'price_change';
+export type GradeUnitType = 'kg' | 'case20kg';
 
 export interface Factory {
   id: string;
@@ -28,6 +29,7 @@ export interface Grade {
   specZh: string;
   specEn: string;
   specVi: string;
+  unitType: GradeUnitType;
   sortOrder: number;
   isActive: boolean;
   updatedAt: string;
